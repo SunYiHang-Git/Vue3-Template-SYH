@@ -1,0 +1,19 @@
+html {
+  font-size: calc((16 / 1920) * 100vw);
+}
+@media screen and (max-width: 1920px) {
+  html {
+    font-size: 16px;
+  }
+}
+body,
+html,
+#app {
+  padding: 0;
+  margin: 0;
+  background-color: #fff;
+  height: 100%;
+}
+* {
+  box-sizing: border-box;
+}
