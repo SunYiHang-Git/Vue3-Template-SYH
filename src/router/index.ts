@@ -10,6 +10,11 @@ const routes: Array<RouteRecordRaw> = [
     path: '/login',
     name: 'Login',
     component: () => import('@/view/Login.vue')
+  },
+  {
+    path: '/read',
+    name: 'Read',
+    component: () => import('@/view/ReadBook.vue')
   }
   // 可以添加更多路由
 ]

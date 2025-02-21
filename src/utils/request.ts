@@ -135,7 +135,7 @@ interface RequestOptions {
   [key: string]: any
 }
 
-async function request<T>(url: string, method: HttpMethods, data: any, options: RequestOptions = {}): Promise<T> {
+async function request<T>(url: string, method: HttpMethods, data: any = {}, options: RequestOptions = {}): Promise<T> {
   try {
     const response = await axiosClient({
       url,
