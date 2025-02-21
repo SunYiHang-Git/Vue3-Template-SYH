@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@element-plus/icons": "^0.0.11",
+    "@vue/runtime-core": "^3.5.13",
     "axios": "^1.7.9",
     "element-plus": "^2.9.4",
     "file-saver": "^2.0.5",

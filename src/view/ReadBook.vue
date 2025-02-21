@@ -1,82 +1,32 @@
 <script setup lang="ts">
-import { getBooksListAPI } from '@/api/read'
-import type { UploadUserFile } from 'element-plus'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import GetArticle, { IDataAPI } from '@/view/ReadBook/getArticle.vue'
 
-const fileList = ref<UploadUserFile[]>([])
-const fileContent = ref<string>('')
-const CHUNK_SIZE = 1024 * 1024 // 每次读取1MB
-
-const readChunk = (file: File, start: number, encoding: string, reader: FileReader): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const blobSlice = file.slice(start, Math.min(start + CHUNK_SIZE, file.size))
-
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        resolve(e.target.result as string)
-      }
-    }
-
-    reader.onerror = (error) => {
-      reject(error)
-    }
-
-    reader.readAsText(blobSlice, encoding)
-  })
+const fileContent = ref<string>('选择章节')
+const title = ref<string>('')
+const page = ref<number>(0)
+const sendData = (data: IDataAPI) => {
+  fileContent.value = data.content
+  title.value = data.title
+  page.value = data.pageNumber
 }
 
-const handleChange = async (uploadFile: any) => {
-  const file = uploadFile.file
-  console.log('file--->', file)
-  console.log('fileList--->', fileList.value)
-  if (file) {
-    let result = ''
-    let start = 0
-    try {
-      const reader = new FileReader()
-      while (start < file.size) {
-        const chunk = await readChunk(file.slice(start, CHUNK_SIZE), start, 'UTF-8', reader)
-        result += chunk
-        start += CHUNK_SIZE
-      }
-
-      // fileContent.value = result
-      console.log('result--->', result.slice(0, 500))
-    } catch (error) {
-      console.error('Error reading file:', error)
-    }
-  }
-}
-interface IDataAPI {
-  [key: string]: any
-}
-interface ArticleData {
-  code: number
-  data?: IDataAPI
-  msg: string
-  state?: number
-}
-/** 获取文章 */
-const getArticle = async () => {
-  try {
-    const res = await getBooksListAPI<ArticleData>('/get/article', {})
-    console.log('res--->', res)
-    if (res.code === 10000) {
-      fileContent.value = res.data?.content
-    }
-  } catch (error) {
-    console.error('Error reading file:', error)
-  }
-}
+const titleH2 = computed(() => {
+  if (!title.value) return '选择章节'
+  return `第${page.value}章: ${title.value}`
+})
 </script>
 
 <template>
   <div class="read-box">
     <div class="setting">
-      <el-button type="primary" @click="getArticle">获取文章</el-button>
+      <GetArticle @sendData="sendData" />
     </div>
     <div class="read">
-      <pre>{{ fileContent }}</pre>
+      <el-scrollbar height="100%">
+        <h2>{{ titleH2 }}</h2>
+        <pre>{{ fileContent }}</pre>
+      </el-scrollbar>
     </div>
   </div>
 </template>
@@ -108,6 +58,7 @@ const getArticle = async () => {
       word-wrap: break-word;
       overflow: auto;
       padding-bottom: 15px;
+      font-size: 25px;
     }
   }
 }
