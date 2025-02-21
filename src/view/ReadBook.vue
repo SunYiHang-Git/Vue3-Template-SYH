@@ -47,12 +47,20 @@ const handleChange = async (uploadFile: any) => {
     }
   }
 }
-
+interface ArticleData {
+  code: number
+  data?: any
+  msg: string
+  state?: number
+}
 /** 获取文章 */
 const getArticle = async () => {
   try {
-    const res = await getBooksListAPI('/get/article', {})
+    const res = await getBooksListAPI<ArticleData>('/get/article', {})
     console.log('res--->', res)
+    if (res.code === 10000) {
+      fileContent.value = res.data
+    }
   } catch (error) {
     console.error('Error reading file:', error)
   }
