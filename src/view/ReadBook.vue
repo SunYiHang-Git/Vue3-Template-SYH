@@ -47,9 +47,12 @@ const handleChange = async (uploadFile: any) => {
     }
   }
 }
+interface IDataAPI {
+  [key: string]: any
+}
 interface ArticleData {
   code: number
-  data?: any
+  data?: IDataAPI
   msg: string
   state?: number
 }
@@ -59,7 +62,7 @@ const getArticle = async () => {
     const res = await getBooksListAPI<ArticleData>('/get/article', {})
     console.log('res--->', res)
     if (res.code === 10000) {
-      fileContent.value = res.data
+      fileContent.value = res.data?.content
     }
   } catch (error) {
     console.error('Error reading file:', error)
