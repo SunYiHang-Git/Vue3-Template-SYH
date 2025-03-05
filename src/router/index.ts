@@ -25,6 +25,11 @@ const routes: Array<RouteRecordRaw> = [
     path: '/update',
     name: 'update',
     component: () => import('@/view/Update/index.vue')
+  },
+  {
+    path: '/drag',
+    name: 'drag',
+    component: () => import('@/view/Drag/index.vue')
   }
   // 可以添加更多路由
 ]

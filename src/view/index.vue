@@ -22,6 +22,9 @@ const goUpdateAbout = () => {
   console.log('goUpdateAbout--->')
   router.push('/update')
 }
+const goDragPage = () => {
+  router.push('/drag')
+}
 </script>
 
 <template>
@@ -47,6 +50,7 @@ const goUpdateAbout = () => {
                 </template>
                 <el-menu-item-group title="第一组" class="menu-item-group">
                   <el-menu-item index="1-1" @click="goReadPage">阅读</el-menu-item>
+                  <el-menu-item index="1-1" @click="goDragPage">拖拽</el-menu-item>
                 </el-menu-item-group>
                 <el-menu-item-group title="第二组">
                   <el-menu-item index="1-3" @click="goTextPage">测试功能</el-menu-item>
