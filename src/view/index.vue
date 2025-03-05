@@ -14,6 +14,14 @@ const goReadPage = () => {
   console.log('阅读--->')
   router.push('/read')
 }
+const goTextPage = () => {
+  console.log('测试功能页面--->')
+  router.push('/test')
+}
+const goUpdateAbout = () => {
+  console.log('goUpdateAbout--->')
+  router.push('/update')
+}
 </script>
 
 <template>
@@ -41,11 +49,11 @@ const goReadPage = () => {
                   <el-menu-item index="1-1" @click="goReadPage">阅读</el-menu-item>
                 </el-menu-item-group>
                 <el-menu-item-group title="第二组">
-                  <el-menu-item index="1-3">2-1</el-menu-item>
+                  <el-menu-item index="1-3" @click="goTextPage">测试功能</el-menu-item>
                 </el-menu-item-group>
                 <el-sub-menu index="1-4">
                   <template #title>2-2</template>
-                  <el-menu-item index="1-4-1">2-2-1</el-menu-item>
+                  <el-menu-item index="1-4-1" @click="goUpdateAbout">更新页面</el-menu-item>
                 </el-sub-menu>
               </el-sub-menu>
               <el-menu-item index="2">
