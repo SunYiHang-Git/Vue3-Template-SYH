@@ -1,3 +1,5 @@
+import useLoading from '@/hooks/Loading/loading'
+
 export interface IOptions {
   value: string
   label: string
@@ -10,66 +12,153 @@ export interface IVersion {
   }[]
 }
 
-export const baseUrl = 'http://k-rpa-lite.kingsware.cn:48080'
-export const baseUrl2 = 'https://k-rpa-lite.donxj.com'
-const timeoutDuration = 15000
-let lastCheckedBaseUrl = baseUrl // 默认使用第一个 baseUrl
-let lastCheckedTime = Date.now() // 上次检查的时间戳
+const { open, close } = useLoading()
 
-/**
- * 检查指定的 baseUrl 是否可用
- * @param {string} url
- * @returns {Promise<boolean>}
- */
-async function isBaseUrlAvailable(url: string) {
-  try {
-    const response = await fetch(url, { method: 'HEAD' })
-    return response.ok
-  } catch (error) {
-    return false
+export const baseUrl = 'http://k-rpa-lite.kingsware.cn:48080'
+export const standbyUrlList = ['https://k-rpa-lite.donxj.com']
+
+/** 超时时间 */
+const timeoutDuration = 15000
+/**  默认使用第一个 baseUr */
+let lastCheckedBaseUrl = baseUrl //
+/** 上次检查的时间戳, 初始化为0，强制首次检查 */
+let lastCheckedTime = 0
+/** 缓存有效期（10分钟） */
+const CACHE_DURATION = 10 * 60 * 1000
+/** 用于并发控制的检查锁 */
+let checkingPromise: Promise<string> | null = null //
+
+// 自定义错误类型
+class NetworkError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NetworkError'
   }
+}
+
+class HttpError extends Error {
+  statusCode: number
+
+  constructor(statusCode: number, message: string) {
+    super(message)
+    this.name = 'HttpError'
+    this.statusCode = statusCode
+  }
+}
+
+class TimeoutError extends Error {
+  constructor() {
+    super('Request timeout')
+    this.name = 'TimeoutError'
+  }
+}
+
+/** 获取全部候选地址列表 */
+function getAllUrls(): string[] {
+  return [baseUrl, ...standbyUrlList]
+}
+
+// 专用健康检查方法（带超时）
+const checkUrlAvailability = async (url: string): Promise<boolean> => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 5000)
+  try {
+    const response = await fetch(`${url}/config.json`, {
+      method: 'HEAD',
+      signal: controller.signal,
+      cache: 'no-cache'
+    })
+    return response.ok
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+// 顺序检查地址可用性
+const findAvailableUrl = async (): Promise<string> => {
+  // 优先检查主地址
+  if (await checkUrlAvailability(baseUrl)) {
+    return baseUrl
+  }
+
+  // 顺序检查备用地址
+  for (const url of standbyUrlList) {
+    if (await checkUrlAvailability(url)) {
+      return url
+    }
+  }
+
+  throw new NetworkError('请求地址不可用')
 }
 
 /**
  * 获取当前可用的 baseUrl
  * @returns {Promise<string>}
  */
-async function getAvailableBaseUrl() {
-  const currentTime = Date.now()
-  // 如果距离上次检查时间不足10分钟，则直接返回上次使用的 baseUrl
-  if (currentTime - lastCheckedTime < 10 * 60 * 1000) {
+async function getAvailableBaseUrl(): Promise<string> {
+  const shouldCheck = Date.now() - lastCheckedTime > CACHE_DURATION || !lastCheckedBaseUrl
+  // 使用缓存结果
+  if (!shouldCheck) {
     return lastCheckedBaseUrl
   }
-  // 检查两个 baseUrl 的可用性
-  const baseUrls = [baseUrl, baseUrl2]
-  for (const currentBaseUrl of baseUrls) {
-    if (await isBaseUrlAvailable(currentBaseUrl)) {
-      lastCheckedBaseUrl = currentBaseUrl
-      lastCheckedTime = currentTime
-      return currentBaseUrl
-    }
+  // 处理并发请求
+  if (!checkingPromise) {
+    checkingPromise = (async () => {
+      try {
+        const availableUrl = await findAvailableUrl()
+        lastCheckedBaseUrl = availableUrl
+        lastCheckedTime = Date.now()
+        return availableUrl
+      } finally {
+        checkingPromise = null
+      }
+    })()
   }
-  throw new Error('所有 baseUrl 都不可用')
+  return checkingPromise
 }
 
 /**
  * 发起 API 请求
  * @param {string} url 相对于基础 URL 的路径
  * @param {'json'|'text'|'blob'} format 响应体的解析格式，默认为 'json'
+ * @param {number} retries 默认重试次数
  * @returns {Promise<Object>} 返回一个 Promise 对象，该对象解析为从 API 获取的数据
  * @throws {Error} 如果请求失败或响应不是有效的格式，则抛出错误
  */
-export const ajaxAPI = async (url: string, format = 'json') => {
-  const currentBaseUrl = await getAvailableBaseUrl()
-  const fullUrl = `${currentBaseUrl}${url}`
+export const ajaxAPI = async <T = any>(url: string, format = 'json', retries = 2): Promise<T> => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutDuration)
 
-  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时')), timeoutDuration))
   try {
-    // 使用 Promise.race 在请求和超时之间进行竞速
-    const res = await Promise.race([fetch(fullUrl).then((res: any) => res[format]()), timeoutPromise])
-    return res
-  } catch (error) {
-    throw error
+    const currentBaseUrl = await getAvailableBaseUrl()
+    const fullUrl = `${currentBaseUrl}${url}`
+
+    const response: any = await fetch(fullUrl, {
+      signal: controller.signal,
+      cache: 'no-cache'
+    })
+    clearTimeout(timeoutId)
+    if (!response.ok) {
+      throw new HttpError(response.status, `请求失败，状态码：${response.status}`)
+    }
+
+    return await response[format]()
+  } catch (error: any) {
+    clearTimeout(timeoutId)
+    // 处理重试逻辑
+    if (retries > 0) {
+      const urls = getAllUrls()
+      const currentIndex = urls.indexOf(lastCheckedBaseUrl)
+      const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % urls.length : 0
+      lastCheckedBaseUrl = urls[nextIndex]
+      return ajaxAPI<T>(url, format, retries - 1)
+    }
+    // 错误类型处理
+    if (error instanceof HttpError) throw error
+    if (error.name === 'AbortError') throw new TimeoutError()
+    throw new NetworkError(`网络请求失败: ${error.message}`)
   }
 }
 
@@ -88,20 +177,31 @@ export const getVersionListAPI = async () => {
  */
 export const getUpdateLogAPI = async (url: string) => {
   return await ajaxAPI(url, 'text')
-  // const fullUrl = baseUrl + url
-  // const res = await fetch(fullUrl).then((res) => {
-  //   return res.text()
-  // })
-  // return res
 }
 
 /** 下载文件 */
-export const downServerFile = async (url: string, name: string = '') => {
-  const currentBaseUrl = await getAvailableBaseUrl()
-  const fullUrl = `${currentBaseUrl}${url}`
-  const res = await fetch(fullUrl).then((response) => response.blob())
-  const blob = new Blob([res])
-  downloadBlob(blob, 'K-RPA Lite' + name)
+export const downServerFile = async (url: string, name: string = '', retries = 1): Promise<void> => {
+  try {
+    open()
+    const currentBaseUrl = await getAvailableBaseUrl()
+    const fullUrl = `${currentBaseUrl}${url}`
+
+    const response = await fetch(fullUrl)
+    if (!response.ok) {
+      throw new HttpError(response.status, '文件下载失败')
+    }
+
+    const blob = await response.blob()
+    await downloadBlob(blob, `K-RPA Lite${name}`)
+  } catch (error) {
+    if (retries > 0) {
+      lastCheckedTime = 0 // 强制刷新缓存
+      return downServerFile(url, name, retries - 1)
+    }
+    throw error
+  } finally {
+    close()
+  }
 }
 /**
  * 创建下载文件，解决浏览器直接打开文件的问题
@@ -161,7 +261,6 @@ function compareVersions(v1: string, v2: string) {
 // 定义一个函数来找到最新版本的对象
 
 /**
- *
  * @param items 传入对象数组
  * @param key 比较的版本key值
  */
